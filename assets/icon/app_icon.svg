@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1A1C20"/>
+      <stop offset="100%" stop-color="#0E1013"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" rx="220" fill="url(#bg)"/>
+  <circle cx="512" cy="512" r="400" stroke="#00E5FF" stroke-opacity="0.25" stroke-width="6" fill="none"/>
+  <!-- Base -->
+  <rect x="332" y="752" width="360" height="40" rx="10" fill="#E6EBF5"/>
+  <rect x="392" y="722" width="240" height="30" rx="8" fill="#E6EBF5"/>
+  <!-- Central Column -->
+  <rect x="494" y="332" width="36" height="390" rx="6" fill="#E6EBF5"/>
+  <!-- Pivot -->
+  <circle cx="512" cy="352" r="42" fill="#FFD740"/>
+  <circle cx="512" cy="352" r="24" fill="#E6EBF5"/>
+  <!-- Horizontal Beam -->
+  <rect x="192" y="342" width="640" height="20" rx="8" fill="#E6EBF5"/>
+  <!-- Left Side: Video A -->
+  <line x1="232" y1="362" x2="162" y2="532" stroke="#00E5FF" stroke-width="6"/>
+  <line x1="232" y1="362" x2="302" y2="532" stroke="#00E5FF" stroke-width="6"/>
+  <line x1="152" y1="532" x2="312" y2="532" stroke="#00E5FF" stroke-width="8" stroke-linecap="round"/>
+  <!-- Right Side: Video B -->
+  <line x1="792" y1="362" x2="722" y2="532" stroke="#00E676" stroke-width="6"/>
+  <line x1="792" y1="362" x2="862" y2="532" stroke="#00E676" stroke-width="6"/>
+  <line x1="712" y1="532" x2="872" y2="532" stroke="#00E676" stroke-width="8" stroke-linecap="round"/>
+</svg>

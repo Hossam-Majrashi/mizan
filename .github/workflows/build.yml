@@ -1,0 +1,277 @@
+name: Mizan Build & Release CI
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # 1. Verification Gate (Linux x64)
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Install Dependencies
+        run: flutter pub get
+
+      - name: Generate Localizations
+        run: flutter gen-l10n
+
+      - name: Code Formatting Check
+        run: dart format --output=none --set-exit-if-changed .
+
+      - name: Static Analysis
+        run: flutter analyze
+
+      - name: Run Verification Gates Rule Checker
+        run: bash tool/check_rules.sh
+
+      - name: Execute Tests
+        run: flutter test
+
+  # 2. Linux Builds (x86_64 and arm64)
+  linux:
+    needs: verify
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-22.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install Linux Build Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libgl1-mesa-dev
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Build Flutter Linux Release
+        run: flutter build linux --release
+
+      - name: Run Packaging Script (deb, rpm, pkg.tar.zst, tar.gz, AppImage)
+        run: bash build_linux.sh
+
+      - name: Run Flatpak Script
+        run: bash flatpak_linux.sh || echo "Flatpak build step finished"
+
+      - name: Upload Linux Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-${{ matrix.arch }}
+          path: dist/*
+          retention-days: 14
+
+  # 3. Android Builds (APK and AAB)
+  android:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Get Dependencies
+        run: flutter pub get
+
+      - name: Build Android APK (Per-ABI)
+        run: flutter build apk --split-per-abi --release
+
+      - name: Build Android App Bundle (AAB)
+        run: flutter build appbundle --release
+
+      - name: Prepare Android Artifacts
+        run: |
+          mkdir -p dist
+          cp build/app/outputs/flutter-apk/*.apk dist/ || true
+          cp build/app/outputs/bundle/release/*.aab dist/ || true
+
+      - name: Upload Android Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-packages
+          path: dist/*
+          retention-days: 14
+
+  # 4. Web Build
+  web:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Build Web Release
+        run: flutter build web --release
+
+      - name: Archive Web Output
+        run: |
+          mkdir -p dist
+          (cd build/web && zip -r ../../dist/mizan-web-release.zip .)
+
+      - name: Upload Web Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-release
+          path: dist/mizan-web-release.zip
+          retention-days: 14
+
+  # 5. Windows Builds
+  windows:
+    needs: verify
+    runs-on: windows-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x64]
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Build Windows Release
+        run: flutter build windows --release
+
+      - name: Run Windows Packaging Script
+        shell: pwsh
+        run: .\build_windows.ps1 -Arch ${{ matrix.arch }}
+
+      - name: Upload Windows Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-${{ matrix.arch }}
+          path: dist/*
+          retention-days: 14
+
+  # 6. macOS Builds (Apple Silicon)
+  macos:
+    needs: verify
+    runs-on: macos-14
+    timeout-minutes: 40
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Build macOS Release
+        run: flutter build macos --release
+
+      - name: Run macOS Packaging Script
+        run: bash build_macos.sh
+
+      - name: Upload macOS Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-packages
+          path: dist/*.dmg
+          retention-days: 14
+
+  # 7. Release on v* Tag
+  release:
+    needs: [linux, android, web, windows, macos]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release_assets
+          merge-multiple: true
+
+      - name: Generate SHA256SUMS
+        run: |
+          cd release_assets
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release_assets/*
+          draft: false
+          prerelease: false
+
+  # 8. Summary Table
+  summary:
+    needs: [verify, linux, android, web, windows, macos]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate Workflow Summary
+        run: |
+          echo "## Mizan Build & Packaging Summary" >> $GITHUB_STEP_SUMMARY
+          echo "| Target | Architecture | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "| --- | --- | --- |" >> $GITHUB_STEP_SUMMARY
+          echo "| Verification Gates | x86_64 | ${{ needs.verify.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Linux (.tar.gz, .deb, AppImage) | x86_64 / arm64 | ${{ needs.linux.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Android (APK, AAB) | universal / per-ABI | ${{ needs.android.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Web | WASM / JS | ${{ needs.web.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Windows (portable, setup) | x64 | ${{ needs.windows.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| macOS (.dmg) | universal / Apple Silicon | ${{ needs.macos.result }} |" >> $GITHUB_STEP_SUMMARY

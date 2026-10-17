@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.h.mizan</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <name>Mizan</name>
+  <summary>Pixel-by-pixel video quality comparison and upscaling detector</summary>
+  <description>
+    <p>
+      Mizan compares two videos pixel by pixel, measures real effective resolution,
+      detects upscaling, compression artifacts, and duplicate frames, completely offline on your device.
+    </p>
+  </description>
+  <url type="homepage">https://hossam-majrashi.github.io/Works/</url>
+  <provides>
+    <binary>mizan</binary>
+  </provides>
+  <developer_name>حسام حسن مجرشي</developer_name>
+  <releases>
+    <release version="1.0.0" date="2026-10-17"/>
+  </releases>
+</component>

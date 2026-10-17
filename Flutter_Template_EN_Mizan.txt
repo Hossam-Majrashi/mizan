@@ -1,0 +1,518 @@
+╔══════════════════════════════════════════════════════════════════════╗
+║ APP NAME                                                             ║
+╠══════════════════════════════════════════════════════════════════════╣
+║ Mizan  (Arabic display name: ميزان)                                  ║
+╚══════════════════════════════════════════════════════════════════════╝
+
+╔══════════════════════════════════════════════════════════════════════╗
+║ APP IDEA                                                             ║
+╠══════════════════════════════════════════════════════════════════════╣
+║ Compare two videos pixel by pixel and tell the user which one has    ║
+║ the best quality.                                                    ║
+║                                                                      ║
+║ PURPOSE                                                              ║
+║ The user often downloads two copies of the same video (from          ║
+║ different sources or in different versions) and one of them has      ║
+║ better quality. The app analyzes both for real and gives one clear   ║
+║ answer: which video has the best quality, or that they are the same  ║
+║ quality and frames. Judgment comes from the actual picture (the      ║
+║ pixels of the decoded frames), never from the file extension or the  ║
+║ file size alone.                                                     ║
+║                                                                      ║
+║ PRIMARY ACTION                                                       ║
+║ Home screen = two large slots (Video A, Video B) and one Compare     ║
+║ button. Pick through the system file picker; also drag-and-drop on   ║
+║ desktop and web. After picking, show file name, size, duration,      ║
+║ resolution, and a thumbnail. Swap and clear buttons. Compare stays   ║
+║ disabled until both are chosen. No accounts, no internet, no upload: ║
+║ everything runs locally and the files never leave the device.        ║
+║                                                                      ║
+║ WHAT IS MEASURED (real values only, from the actual files)           ║
+║ 1. Pixels: declared resolution and total pixel count, and the        ║
+║    effective resolution (the real detail present in the picture).    ║
+║    Detect upscaling: a declared 1080p video that is really an        ║
+║    upscaled 720p has fewer real pixels than a native 1080p one.      ║
+║ 2. Pixel-level picture quality from decoded frames sampled at the    ║
+║    same timestamps in both videos (aligned by time and scaled to a   ║
+║    common size for comparison only): sharpness and fine detail,      ║
+║    compression artifacts (blockiness, banding, mosquito noise),      ║
+║    noise, color range and accuracy, and a per-frame pixel difference ║
+║    between A and B (such as SSIM and PSNR) after alignment.          ║
+║ 3. Frames: frame rate (average, plus variable-frame-rate detection), ║
+║    total frame count, genuinely unique frames, duplicated frames     ║
+║    (for example 60 fps that is really 30 fps repeated), dropped or   ║
+║    missing frames, and duration mismatch between A and B.            ║
+║ 4. Technical: video codec and profile, bit depth, chroma             ║
+║    subsampling, color space, HDR flag, video bitrate, rotation.      ║
+║    Audio codec, bitrate, channels, and sample rate are shown as      ║
+║    information and used only to break a tie.                         ║
+║ 5. Same content check: are A and B really the same video? Use a      ║
+║    perceptual comparison of the sampled frames. If they are          ║
+║    different videos, say so clearly, still show the technical        ║
+║    comparison, and mark the quality verdict as low confidence.       ║
+║                                                                      ║
+║ VERDICT                                                              ║
+║ - One main answer at the top in large text: "Best quality: <file     ║
+║   name>" (A or B), with a confidence level (high, medium, low) and   ║
+║   one plain sentence of why, for example "B has real 1920x1080       ║
+║   detail; A is an upscaled 1280x720".                                ║
+║ - Other results: "Same quality and frames" (only when every measured ║
+║   difference is inside the tolerance), and "Mixed" when each file    ║
+║   wins in different areas. For Mixed, still name the overall better  ║
+║   file by the priority order and list where the other one is ahead.  ║
+║ - Never name a winner from metadata alone when the decoded pixels    ║
+║   disagree. Be honest that picture quality without the original      ║
+║   source is estimated, and let that lower the confidence when the    ║
+║   evidence is weak.                                                  ║
+║ - Priority order, written in code as a documented and tested module: ║
+║   real pixels (effective resolution) and pixel-level picture         ║
+║   quality, then real unique frame rate and frame completeness, then  ║
+║   bitrate, codec, and bit depth, then audio (tie-break only). File   ║
+║   size is information only; when the two are equal, mention which    ║
+║   file is smaller.                                                   ║
+║ - Result screen: verdict card on top; an A vs B table (value, value, ║
+║   winner per row, reason one tap away); a frame viewer showing the   ║
+║   same timestamp from A and B side by side or with a slider, with    ║
+║   zoom to inspect pixels and next and previous sample navigation;    ║
+║   copy and save the report as text and JSON.                         ║
+║                                                                      ║
+║ SETTINGS                                                             ║
+║ Analysis depth (quick, normal, thorough = how many sample timestamps ║
+║ and how much is decoded) and tolerance for "same" (strict, normal,   ║
+║ lenient), plus language and theme. Every option really changes the   ║
+║ analysis.                                                            ║
+║                                                                      ║
+║ ENGINE AND PERFORMANCE                                               ║
+║ - Files can be several GB: never load a whole file into memory; read ║
+║   from the path or stream, decode only the sampled frames, run the   ║
+║   analysis off the UI thread (isolate or native process) with a      ║
+║   progress bar showing the current stage and a Cancel button. Leave  ║
+║   no temporary files after finishing or cancelling.                  ║
+║ - The probing and decoding engine is the heart of the app. Research  ║
+║   at execution time and choose, per platform, a real, maintained,    ║
+║   license-compatible solution that reads all common video formats    ║
+║   and codecs (H.264, HEVC, VP9, AV1, MPEG-4, ProRes... as each       ║
+║   platform allows). FFmpeg-based tools are the likely route; check   ║
+║   the LGPL/GPL obligations and write them in README.md. Do not use a ║
+║   package that is discontinued or does not support the platform it   ║
+║   is meant to serve.                                                 ║
+║ - Web: fully local, no upload. If the browser cannot decode a file,  ║
+║   show a translated message saying so and never fake a result.       ║
+║   Record every per-platform codec and decoding limit honestly in the ║
+║   Feature / Platform / Status / Reason table.                        ║
+║ - Handle: not a video file, corrupt file, no video stream, the same  ║
+║   file picked twice, a very short video, different durations, denied ║
+║   permission, a file moved or deleted during analysis.               ║
+║ - Android: system picker only (no broad storage permission) and no   ║
+║   INTERNET permission in the main manifest.                          ║
+║                                                                      ║
+║ PROJECT-SPECIFIC SKILLS TO RESEARCH                                  ║
+║ Video probing and decoding per platform; FFmpeg licensing and        ║
+║ packaging (Android 16 KB alignment, Linux packages and Flatpak,      ║
+║ macOS and iOS sandbox, Windows arm64); frame-quality metrics         ║
+║ (sharpness, blockiness, banding, SSIM, PSNR); effective-resolution   ║
+║ and upscaling detection; frame-rate and VFR analysis; large-file     ║
+║ handling; file pickers and drag-and-drop on each platform.           ║
+║                                                                      ║
+║ TESTS                                                                ║
+║ Unit tests for the verdict module using small test videos generated  ║
+║ during test setup. Cover: identical videos, the same video at lower  ║
+║ resolution, the same video at lower bitrate, a native 1080p vs the   ║
+║ same video upscaled from 720p, 30 fps vs 60 fps duplicated, two      ║
+║ different videos, and the same stream in two different containers    ║
+║ (must report same quality and frames).                               ║
+╚══════════════════════════════════════════════════════════════════════╝
+
+Universal Implementation Template for Flutter Projects
+======================================================
+
+How to use:
+Edit only the two boxes above, then send this entire file to the coding agent. Any specific platform, extra language, or special constraint goes inside the idea box.
+When the agent finishes: link the project to a GitHub repository and push it, and building, testing, and packaging start automatically (section 15).
+This file is an execution order for the coding agent. It does not request an app that asks its users for an app name and idea. The two boxes are inputs for the agent only.
+
+
+00. Execution contract (non-negotiable)
+=======================================
+
+- Do NOT produce an implementation plan, outline, proposal, or list of questions. Implement every line of this file literally and write real files in the workspace.
+- Every item here is mandatory unless it says "default" or "when needed". The idea defines the product and may restrict platforms and languages or add requirements; it does not cancel the rules for structure, onboarding, theme, or verification.
+- When an ordinary detail is missing: choose a sound solution, record it in one line under "Assumptions" in PROJECT_NOTES.md, and continue. Do not ask and do not request approval. The only exception: if both boxes are empty or define no function at all, ask one single question and stop.
+- Forbidden: TODO, empty functions, "the remaining files are similar", fake data shown as real results, buttons or settings with no function, and claiming verification that did not happen.
+- If a feature needs an unavailable key or service: implement what you can, prepare the correct integration and a separate configuration with an example, and state the exact missing requirement. Never fabricate a result.
+- What your environment cannot do (building iOS and macOS on Linux, a missing packaging tool...): still write the complete configuration and scripts, and record the status honestly as "source ready", "built", "run", or "not verified", with the reason.
+- Work to completion in a single run. No progress reports along the way; deliver one final report as defined in section 18.
+
+
+01. Derive the product from its name and idea
+=============================================
+
+You are a Flutter and Dart engineer. Turn the name and idea into a complete, real, runnable application, not a description, plan, or interface mockups.
+
+- The idea is the reference for app behavior. The name serves identity and wording only. If the name is missing and the idea is clear, derive a suitable name.
+- Record in PROJECT_NOTES.md, then move straight to implementation: the problem and who uses the app, the primary action that must be clear the moment the app opens, the required functions and screens, the data and where it lives and whether internet is needed, the target platforms and their differences, the technical name and application ID, and every assumption.
+- Derive the features from the idea and implement each until it is fully usable. Do not copy a fixed feature list into every project.
+- Add supporting elements (search, export...) only where they have a clear role in the workflow.
+- Accounts, sign-in, payments, ads, analytics, and cloud sync only if the idea asks for them. If AI is part of the idea, define its role, inputs, and result review.
+- Default platforms: Windows, Linux, macOS, Android, iOS, and Web, with Flatpak as a Linux distribution format.
+- If the idea names a platform or a subset, honor that scope exclusively and remove what does not belong. Example: desktop-only app = no screens/mobile, no screens/web, and no Android, iOS, or Web targets. If the function depends on a specific operating system, choose suitable targets and document why.
+- Default languages: Arabic and English, plus any language the idea mentions.
+
+
+02. Skills to learn before writing code
+=======================================
+
+Before writing code, read the current official documentation for each skill below; do not rely on what you remember about older versions. Then record a "Skills" section in PROJECT_NOTES.md with what you learned that affects the implementation.
+
+Fixed skills:
+- Flutter: responsive and adaptive layout, gen-l10n, ARB files and RTL, and the current platform and architecture support matrix.
+- window_manager and desktop window management.
+- The icon-generation package you will choose, and the Android adaptive icon safe zone.
+- Linux packaging: dpkg-deb, rpmbuild and spec files, PKGBUILD and makepkg, AppImage, flatpak-builder, and AppStream metainfo.
+- Production Android: signing, AAB, and current Google Play policies.
+- GitHub Actions: hosted runners (including ARM), matrices, artifacts, and Releases.
+
+Project-specific skills:
+- Infer from the idea the technical skills unique to this project (media codecs, file-format parsing, an external service API, FFI, OS permissions...), read their documentation before implementing, and record them in the same section.
+
+
+03. Google Play acceptance on first review (when Android is targeted)
+=====================================================================
+
+Explicit goal: the app is accepted on the first review. Acceptance comes from an app that works and is honest about what it does, not from a good-looking one.
+
+- The core feature really works on a real device, from first launch to result. Test this full path before polishing details. A beautiful app that does not do what it promises gets rejected.
+- Choose the correct tools and packages for the app's purpose, and confirm they support Android and the formats and cases the idea actually needs.
+- No sample content, placeholder text, dead buttons, or "coming soon" screens. Neither the app nor its store listing claims a feature that does not exist.
+- Request the fewest permissions, only at the moment the feature is used, with a translated explanation. Prefer system pickers (file and photo pickers) over broad storage permissions.
+- Avoid restricted permissions (MANAGE_EXTERNAL_STORAGE, QUERY_ALL_PACKAGES, REQUEST_INSTALL_PACKAGES, SYSTEM_ALERT_WINDOW, SMS, call log, accessibility, background location) unless the idea requires them; if it does, document the justification and the required declaration in PLAY_NOTES.md.
+- Do not put INTERNET or anything else in the main AndroidManifest unless it is used. No cleartext HTTP.
+- No ads, analytics, or third-party SDKs unless the idea asks for them.
+- If the app collects personal data, needs keys, or uses the network in ways that touch the user: write an honest PRIVACY_POLICY.md in Arabic and English and show its link or text inside Settings.
+- At implementation time, check the official documentation for the current minimum targetSdk and the current Google Play requirements for native libraries (including 16 KB alignment), and apply them.
+- Production package: a signed AAB. Signing through key.properties, excluded from the repository in .gitignore, with a key.properties.example and the keystore generation command in BUILD_NOTES.md.
+- Write PLAY_NOTES.md: short and long store descriptions in Arabic and English (honest), permissions with the reason for each, suggested Data safety answers, content-rating notes, and the list of required screenshots.
+- Do not copy another app's name, logo, or identity.
+- No crash at startup, when a permission is denied, or when the network drops.
+
+
+04. Technologies and dependencies
+=================================
+
+- Add every dependency with flutter pub add so you get the latest compatible stable version at execution time. Never write version numbers from memory.
+- Check each package's pub.dev page for support of every target platform and for recent maintenance. Do not rely on the package name alone.
+- Use the stable Flutter available in the environment and match APIs to that version's documentation.
+- Pick one state-management approach that fits the app's size and apply it consistently, without extra layers.
+- Separate the UI from logic and data access.
+- Add a backend, native code, or FFI only when truly needed.
+- Document in PROJECT_NOTES.md every dependency that needs configuration, permissions, or external tools.
+
+
+05. Application identity and icon
+=================================
+
+- Technical name: lowercase_with_underscores derived from the given name.
+- Application ID in reverse-DNS form com.h.<shortname>, lowercase letters and digits only (for example com.h.myapp), adapted to the format each system, package, and Flatpak requires.
+- The display name is independent of the technical name and is translated per language when a suitable equivalent exists.
+- Apply the name and icon in the UI, window title, platform configuration, and distribution files.
+- Design an icon that expresses the app's idea, by code: SVG then conversion to PNG, or a Canvas drawing via a Dart script. Save a 1024×1024 PNG in assets/icon along with the editable source. It must be clear when small and suit both themes.
+- Android adaptive icon: keep every important element inside the safe zone (a 66dp-diameter circle in the center of the 108dp layer) and add a monochrome layer if the tool supports it. Verify with a preview that the symbol is not clipped.
+- Link the icon through a multi-platform icon-generation package that you choose at execution time from the latest on pub.dev that supports the target platforms (icons_launcher is a possible candidate, not required). Do not pin a package or version in advance, and follow the chosen package's documentation. Never use flutter_launcher_icons.
+- Complete by hand any target the package does not cover (Linux, Flatpak, AppImage, web icon) and verify the resulting resources.
+- Add only the necessary fonts and images, with permissive licenses, declared in pubspec.yaml.
+
+
+06. Project structure
+=====================
+
+lib/
+  core/
+    theme/
+    l10n/
+    constants/
+    routing/
+  shared/
+    models/
+    services/
+    widgets/
+  features/
+    onboarding/
+    settings/
+    <features derived from the idea>/   (models/ services/ widgets/ as needed)
+  platform/
+    android/ ios/ linux/ macos/ windows/ web/
+  screens/
+    mobile/
+    desktop/
+    web/
+  main.dart
+assets/
+  icon/
+l10n/            (ARB files)
+test/
+tool/
+  check_rules.sh
+
+- Create only the platform and screen folders that are targeted, and no empty files just to complete the shape.
+- What belongs to one feature stays inside it. An interface used by one feature stays in features/<feature>/services and moves to shared/services once more than one feature uses it.
+- platform: implementations only, no abstract classes. Contracts live with the owning feature or in shared/services.
+- core: theme, localization, constants, and routing.
+- screens: each platform category gets its own design with a suitable layout and interaction, reusing shared logic and components. mobile for Android and iOS, desktop for Windows, Linux, and macOS, web for the browser, adapting to phone and desktop screens.
+- Use conditional imports or suitable abstraction so the web build stays valid when targeted.
+- Standing edit rule: copy the following sentence verbatim into PROJECT_NOTES.md and AGENTS.md:
+  "Any edit or feature addition MUST be applied across all three platform folders (screens/mobile, screens/desktop, screens/web) that exist in this project, each with its own platform-specific design."
+  Shared logic is written once in shared/features and never copied; each platform's UI is edited inside its own folder.
+
+
+07. Choose a design that fits the idea
+======================================
+
+Write a short DESIGN_DECISIONS.md, then move to implementation: the user's most important task, the information needed during it, what is always visible versus shown on demand, the navigation and layout approach and why, and how the experience differs across phone, desktop, and web.
+
+- Choose the design from the idea: an editor, a workspace, a list, a split view, a dashboard, or a screen focused on a single action.
+- A simple interface with a clear visual hierarchy and an easily reachable primary function.
+- Display language, terminology, and icons suited to the app's field.
+- Do not repeat the same action in several visible places without need.
+- Use screen space according to the task, and keep grids and lists balanced as width and item count change.
+- Design real states: long content, empty, error, and loading.
+
+
+08. Responsive layout and usability
+===================================
+
+- Every screen of the app is fully responsive to any window size.
+- Use LayoutBuilder for local layout that depends on the space available inside a widget, with Flexible, Expanded, Wrap, and scrolling where needed.
+- MediaQuery.of(context).size is forbidden. Use MediaQuery.sizeOf(context) only for a decision about the whole app window.
+- Keep the layout intact when the window narrows, the device rotates, the keyboard appears, or text is enlarged. Make long pages scrollable and handle safe areas.
+- Desktop apps use window_manager with setMinimumSize; the default minimum is 800×600, adjusted if the app type needs another size.
+- Support keyboard, mouse, and touch per platform, with clear focus order, suitable touch targets, and shortcuts for repeated tasks.
+- Add accessibility semantics, readable contrast, and respect for text scaling.
+
+
+09. Localization and text direction
+===================================
+
+- Use flutter gen-l10n and ARB files in l10n/ (l10n.yaml configured per the current Flutter docs) for Arabic, English, and any language the idea mentions. Adding a language later = adding one ARB file only.
+- Every static user-visible UI string comes from ARB: titles, buttons, settings, error messages, permission texts, empty states, and tooltips. User data, names, links, and source-provided values are displayed as they are.
+- Use the system language if supported, otherwise Arabic. Save the user's choice and apply it immediately.
+- Switch RTL/LTR by language using logical directions (start/end and EdgeInsetsDirectional). Mirror directional icons where needed, and keep links, email, and code in the correct direction.
+- Use plurals, variables, and number and date formatting per language.
+- Choose a font that supports Arabic and the other languages, with a license that allows its use.
+- Write a test that verifies ARB key parity across all languages.
+
+
+10. First-run setup and settings
+================================
+
+Mandatory first-run sequence:
+
+1. Splash/about screen: the app icon and a short description of what it does.
+2. Language selection screen.
+3. Theme selection screen: dark, light, or follow system.
+4. Home screen: the primary action derived from the idea (for example "Create Project" where it fits) and a Settings button.
+
+- Save language, theme, and onboarding completion in shared_preferences or whatever suits the platform. Show onboarding only once.
+- Settings: change language and theme, plus whatever the app really needs (a specific behavior, a file save location...). Every option works and persists its effect.
+- The developer section is at the end of the Settings screen on all platforms, with a layout suited to each platform. Constants in core/constants/developer_info.dart:
+
+    Name:     حسام حسن مجرشي
+    Email:    Hossam.Majrashi@gmail.com
+    Website:  https://hossam-majrashi.github.io/Works/
+
+  - The name stays as is in every language; the section title and the email and website labels come from ARB.
+  - Open the email and website with url_launcher, handle failure with a translated message, and allow copying both with a brief confirmation.
+
+
+11. Theme and colors
+====================
+
+Mandatory fixed colors:
+
+Dark mode:
+  Page background:          #212327
+  Icon and button surfaces: #232627
+
+Light mode:
+  Page background:          #efeef1
+  Icon and button surfaces: #fefefe
+
+- "Icon and button surfaces" means the element's background. You choose the text and icon glyph colors with readable contrast (at least 4.5:1).
+- Derive one distinctive accent color from the app's identity and use it sparingly.
+- Separate nearby surfaces with a subtle border or shadow, and make active, disabled, and focus states clear.
+- Define colors and fonts in core/theme through ThemeData, ColorScheme, and ThemeExtension where needed. No hard-coded UI colors inside widgets.
+- Message colors (success, error, warning) are semantic and high-contrast.
+- Colors that are data or user-edited content are managed in the content model, and their place in code is marked with the comment // rule-exempt: content-color.
+
+
+12. Data and working functionality
+==================================
+
+- Build a data model that fits the idea with the simplest storage that meets its requirements: shared_preferences for preferences, suitable storage for complex or large data.
+- Implement the full path of the primary action: input, validation, execution, result display, and saving when needed.
+- Make loading, success, empty, error, and cancel states clear.
+- Move heavy work to an isolate or whatever suits the platform. Provide progress and cancellation for long operations.
+- Handle network loss, read and write failures, and denied permissions in an understandable, recoverable way.
+- Store secrets and credentials in secure storage appropriate to the platform, with no secret keys in source or web assets. Third-party service keys are entered by the user in Settings if the idea depends on them.
+- No sample data standing in for a finished feature. A separate, clearly labeled demo mode is allowed only if useful.
+- Every button, menu, and setting has a real function wired to the app's logic.
+
+
+13. Platforms, architectures, and builds
+========================================
+
+- Full export support for every targeted platform: Windows, Linux, macOS, Android, Flatpak, iOS, and Web.
+- Required architectures: x86-64, AArch64 (ARM64), ARMv7 (32-bit), and x86-32 (32-bit), on every platform that supports them. Consult the current Flutter support matrix and each dependency's native support. Build everything that is supported; for anything the platform or Flutter does not support, write the reason. Do not claim support that does not exist and do not skip what is supported.
+- Android: AAB for production and per-ABI APKs for direct distribution.
+- Automated builds for every target (Windows, macOS, iOS, and the rest) run through GitHub Actions as defined in section 15. Also document the local build commands for each target.
+- Write BUILD_NOTES.md with a table: platform / architecture / command / requirements / status (source ready, built, run, not verified) / reason.
+- Keep prepared source, a successful build, and an actual run clearly separate.
+
+
+14. Linux distribution and Flatpak
+==================================
+
+Create a complete, executable build_linux.sh that produces:
+
+  .rpm   (compatible with dnf, yum, and zypper)
+  .deb
+  .pkg.tar.zst
+  .tar.gz
+  AppImage
+
+- All outputs go in a dist/ folder at the project root (not the system root).
+- Extract the version from pubspec.yaml and convert it to the correct form for each package type.
+- Include the app, libraries, resources, the .desktop file, and the icon as each package type requires.
+- Declare correct dependencies per format. Do not assume the Flutter binaries alone are enough. For rpm, prefer soname-based dependencies over distribution-specific package names so it works on Fedora, openSUSE, and others.
+- Put the app name, version, and architecture in output file names, and prepare every Linux architecture that is supported and can actually be built.
+- Check tools before using them and print clear instructions for what is missing. Failure must be obvious; never produce an incomplete file under a successful package name.
+- An option to build one type or all, defaulting to all.
+- Do not depend on sudo, and keep package preparation separate from installation.
+- AppImage: embed update information (gh-releases-zsync) so a .zsync file is produced next to it, taking the repository name from the GITHUB_REPOSITORY variable inside CI (without it, a plain AppImage is produced). Attach the .zsync to the release.
+- flatpak_linux.sh produces a .flatpak bundle for each architecture in dist/.
+- build_linux.sh and flatpak_linux.sh work on x86_64 and aarch64 by detecting the architecture automatically (uname -m), and GitHub Actions calls them as they are (section 15).
+
+Flatpak:
+
+- Create flatpak_linux.sh that reads its files from the flatpak/ folder and writes its output to dist/.
+- flatpak/ contains: <app-id>.json, <app-id>.metainfo.xml, and <app-id>.desktop, where <app-id> is the project's own application ID (com.h.<name>), not a fixed one.
+- Choose the runtime and the minimum permissions the app truly needs per the current flatpak-builder docs, and validate the metainfo with the AppStream tool if available.
+- Document build, install, and run requirements. Flatpak is a Linux distribution format, not a screen category.
+
+
+15. GitHub Actions: automated build, test, and packaging
+=======================================================
+
+Goal: as soon as the project is linked to a GitHub repository and pushed, every targeted platform is built and tested and every package is produced automatically on 64-bit and ARM processors, with no manual setup. Create .github/workflows/build.yml (one file with independent jobs).
+
+Triggers (on): push to the main branch, pull_request, a release tag v*, and workflow_dispatch for manual runs.
+
+Jobs. Create only those for targeted platforms (desktop-only app = no android, ios, or web jobs):
+
+1. verify (Linux x64): install stable Flutter, flutter pub get, localization generation, dart format --set-exit-if-changed, flutter analyze, tool/check_rules.sh, flutter test. All build jobs depend on it (needs).
+2. linux: a matrix of x64 and arm64 on native Linux runners for each architecture (no emulation).
+   - Install Flutter's Linux prerequisites and the system libraries the project's native dependencies need.
+   - Build on the oldest still-supported hosted Linux runner for wider glibc compatibility across distributions.
+   - flutter build linux --release, then run build_linux.sh (rpm, deb, pkg.tar.zst, tar.gz, AppImage) and flatpak_linux.sh for each architecture.
+   - Any tool missing on the runner (makepkg, rpmbuild...) is provided through a container or a suitable package. If a format is impossible on some architecture, write the reason in BUILD_NOTES.md and mark it "not produced" in the summary; silent skipping or producing a fake file is forbidden.
+   - Validate every package before uploading (dpkg-deb --info, rpm -qp, tar -tf, extracting the AppImage).
+   - Smoke run: launch the built app under xvfb for a few seconds and confirm it is still running without crashing.
+3. windows: x64 and arm64 (a native ARM runner, or a cross-build if the current Flutter support matrix allows it). For each architecture: a portable zip (-portable) and two installers: an .msi (WiX or equivalent) and a -setup.exe (Inno Setup, which supports arm64; install it on the runner if missing), via build_windows.ps1. A Flutter app on Windows cannot run as a single standalone exe (it needs flutter_windows.dll and the data folder), so distribution is either an installer or a zip. Smoke run: launch the program and confirm it is alive after a few seconds.
+4. macos: an Apple Silicon runner. Flutter release builds come out Universal (arm64 and x86_64): verify with lipo -archs. Via build_macos.sh produce three dmg files: universal (runs on both), x86_64 for Intel Macs, and arm64 for Apple Silicon (M1 and later). The two dedicated ones are derived from the universal build with lipo -thin on every Mach-O file inside the bundle, then re-signed ad hoc (codesign --force --deep -s -), and each dmg is verified with lipo -archs before upload. Smoke run on the Apple Silicon runner, and on an Intel runner too if the current GitHub documentation offers one.
+5. android (when targeted): AAB and per-ABI APKs according to the current Flutter support matrix. Signed when signing secrets exist; otherwise produced unsigned with a clear note.
+6. ios (when targeted): flutter build ios --release --no-codesign, then an .ipa (a Payload folder inside a zip) for arm64 (iPhone and iPad). Signed when signing secrets exist (certificate and provisioning profile); otherwise produced with an -unsigned name and a note that installing it needs re-signing.
+7. web (when targeted): flutter build web --release and a zip archive. No external deployment unless the idea asks for it.
+8. release (on a v* tag): downloads all packages, generates SHA256SUMS.txt, and creates a GitHub Release with every file. The contents: write permission belongs to this job alone.
+9. summary (if: always()): a table in the run summary: platform / architecture / format / status.
+
+General rules:
+- Install Flutter in a way that works on each runner's architecture: a maintained action such as subosito/flutter-action if it supports the architecture, otherwise clone the stable channel from git.
+- The version comes from pubspec.yaml, and outputs are uploaded as artifacts with a reasonable retention period.
+- File names in the Release are uniform, and the architecture naming is: Linux uses x86_64 and aarch64 (even if the package uses amd64 or arm64 internally), Windows uses x64 and arm64, macOS uses universal, x86_64 (Intel), and arm64 (Apple Silicon), and iOS uses arm64. The required Release layout (an example; drop whatever the project does not target or Flutter does not support):
+
+    SHA256SUMS.txt
+    <app>-<version>-linux-x86_64.AppImage
+    <app>-<version>-linux-x86_64.AppImage.zsync
+    <app>-<version>-linux-x86_64.deb
+    <app>-<version>-linux-x86_64.rpm
+    <app>-<version>-linux-x86_64.pkg.tar.zst
+    <app>-<version>-linux-x86_64.tar.gz
+    <app>-<version>-linux-x86_64.flatpak
+    <app>-<version>-linux-aarch64.(the same seven formats)
+    <app>-<version>-macos-universal.dmg
+    <app>-<version>-macos-x86_64.dmg        (Intel Macs)
+    <app>-<version>-macos-arm64.dmg         (Apple Silicon Macs: M1 and later)
+    <app>-<version>-windows-x64.msi
+    <app>-<version>-windows-x64-setup.exe
+    <app>-<version>-windows-x64-portable.zip
+    <app>-<version>-windows-arm64.msi
+    <app>-<version>-windows-arm64-setup.exe
+    <app>-<version>-windows-arm64-portable.zip
+    <app>-<version>-android-<abi>.apk and an .aab file
+    <app>-<version>-ios-arm64.ipa           (or -ios-arm64-unsigned.ipa when unsigned)
+    <app>-web-<version>.zip
+
+  SHA256SUMS.txt covers every attached file.
+- Packaging logic lives in the scripts (build_linux.sh, flatpak_linux.sh, build_windows.ps1, build_macos.sh); the workflow calls them and does not duplicate them, so the same thing runs locally and on GitHub. The scripts detect the architecture automatically.
+- fail-fast: false so one platform failing does not hide the rest. Default permissions: contents: read, concurrency that cancels the older run on the same branch, timeout-minutes on every job, and caching for Flutter, pub, and Gradle.
+- Hosted-runner labels, ARM availability (Linux and Windows), macOS, and their limits and cost in private repositories: check the current GitHub documentation at writing time, not from memory, and record them in BUILD_NOTES.md. Make the ARM jobs switchable with a repository variable ENABLE_ARM (default true) so they do not hang in the queue if unavailable.
+- Official actions (actions/*) at the latest major version confirmed from their pages at writing time. Any third-party action is pinned to a full SHA.
+- Secrets are optional and the workflow runs without them (unsigned outputs): Android signing (base64 keystore and passwords), macOS signing and notarization, and Windows signing. Document their names and how to add them in BUILD_NOTES.md. Never print secrets in logs. Pull requests from forks have no secrets.
+- 32-bit architectures (ARMv7 and x86-32) are not built in CI for desktop because Flutter does not support them there. Likewise Windows x86, Linux riscv64, and FreeBSD: add jobs for them only if the current Flutter support matrix allows it at execution time; otherwise document the lack of support in BUILD_NOTES.md. Android builds what the current matrix supports.
+- The agent cannot run Actions from its environment: record the status as "source ready, not run on GitHub" until it actually runs, and never claim the automated build passed. Explain in BUILD_NOTES.md how to trigger it (push, or the Actions tab then Run workflow) and where the packages appear (Artifacts and Releases).
+
+
+16. Documentation and project continuity
+========================================
+
+- README.md: the app's idea, implemented features, how to run, service setup if any, and downloading ready-made packages from Releases.
+- PROJECT_NOTES.md: assumptions, skills, structure, storage, state management, a "Feature / Platform / Status / Reason" table for platform differences, and the edit-rule sentence from section 06.
+- DESIGN_DECISIONS.md: why the design is what it is and how it adapts.
+- BUILD_NOTES.md: builds, packaging, architectures, and what was verified, plus GitHub Actions runners, optional secrets, and how to trigger it.
+- PLAY_NOTES.md and PRIVACY_POLICY.md: when Android is targeted, as in section 03.
+- AGENTS.md: points to the files above and preserves these rules for future sessions:
+  - The verbatim edit-rule sentence for the three screens folders.
+  - Shared logic is never copied between screens.
+  - UI strings come from ARB, UI colors from the theme, and tool/check_rules.sh runs before any delivery.
+  - Chosen technologies and platforms change only for a documented need, with the docs updated.
+  - Any change to platforms, packages, or native libraries also updates .github/workflows/build.yml.
+  - Limits and missing requirements are stated plainly, with no claim of unverified completion.
+- Create CLAUDE.md and GEMINI.md as one line each: "Read AGENTS.md first and follow it."
+
+
+17. Verification gates (mandatory before delivery)
+==================================================
+
+Run what the environment allows and record the actual result:
+
+- flutter pub get, localization generation, and icon generation.
+- dart format, then flutter analyze with zero issues.
+- flutter test: tests for the important business logic, the primary flow, and impactful failure cases, plus the ARB key-parity test. Avoid tests that merely repeat the code without verifying behavior.
+- Create tool/check_rules.sh and run it; it fails (exit ≠ 0) on any of:
+    1. MediaQuery.of(context).size in lib/
+    2. flutter_launcher_icons in any file
+    3. abstract class or interface inside lib/platform
+    4. TODO, FIXME, or UnimplementedError in lib/
+    5. Hard-coded colors (Color(0x… or Colors.* except transparent) outside lib/core/theme, unless marked rule-exempt: content-color
+    6. A literal string directly inside Text('…') or Text("…") in the UI
+    7. A screens/mobile, desktop, or web folder present though the idea does not target it, or targeted and missing
+    8. A missing .github/workflows/build.yml
+- Validate .github/workflows/build.yml with actionlint if available, otherwise at least parse the YAML, and confirm it matches the targeted platforms and the scripts that exist.
+- Verify: Arabic and English, RTL/LTR, both themes, varied screen sizes, long text, text scaling, and persistence of preferences and data after restart.
+- Review every interactive element: it is wired to real logic and nothing overflows.
+- Build and run what the environment allows, and record the difference between what was built, what was run, and what could not be verified.
+- Keep build and documentation files consistent with the final name, idea, and features.
+
+
+18. Delivery
+============
+
+One final, concise report, no marketing:
+
+- What was actually implemented.
+- Run and build commands.
+- Verification table: item / status (passed, failed, not run) / reason.
+- The platform and architecture table from BUILD_NOTES.md.
+- GitHub Actions status ("source ready, not run on GitHub" until it actually runs), with the optional secrets it needs.
+- Exactly which external requirements remain (keys, signing, tools, other build systems).
+
+Start now from the app name and idea in the two boxes above and implement the real project until it is usable and verifiable. No plan.

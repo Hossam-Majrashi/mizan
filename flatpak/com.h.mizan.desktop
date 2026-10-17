@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Mizan
+GenericName=Video Quality Comparator
+Comment=Compare two videos pixel by pixel to discover the highest quality
+Exec=mizan %U
+Icon=com.h.mizan
+Type=Application
+Categories=AudioVideo;Video;Utility;
+Terminal=false
+StartupNotify=true

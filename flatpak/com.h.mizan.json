@@ -1,0 +1,28 @@
+{
+  "app-id": "com.h.mizan",
+  "runtime": "org.freedesktop.Platform",
+  "runtime-version": "23.08",
+  "sdk": "org.freedesktop.Sdk",
+  "command": "mizan",
+  "finish-args": [
+    "--share=ipc",
+    "--socket=x11",
+    "--socket=wayland",
+    "--device=dri",
+    "--filesystem=host:ro"
+  ],
+  "modules": [
+    {
+      "name": "mizan",
+      "buildsystem": "simple",
+      "build-commands": [
+        "install -D -m 755 mizan /app/bin/mizan",
+        "cp -r data /app/bin/",
+        "cp -r lib /app/bin/",
+        "install -D -m 644 com.h.mizan.desktop /app/share/applications/com.h.mizan.desktop",
+        "install -D -m 644 com.h.mizan.metainfo.xml /app/share/metainfo/com.h.mizan.metainfo.xml",
+        "install -D -m 644 app_icon.png /app/share/icons/hicolor/1024x1024/apps/com.h.mizan.png"
+      ]
+    }
+  ]
+}
