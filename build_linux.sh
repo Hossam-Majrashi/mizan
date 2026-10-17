@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 set -e
 
-ARCH=$(uname -m)
+HOST_ARCH=$(uname -m)
+ARCH="$HOST_ARCH"
 APP_NAME="mizan"
 APP_ID="com.h.mizan"
 VERSION=$(grep -m 1 "^version:" pubspec.yaml | cut -d ' ' -f 2 | cut -d '+' -f 1)
 BUILD_NUM=$(grep -m 1 "^version:" pubspec.yaml | cut -d '+' -f 2)
 
-echo "=== Building Linux Packages for $APP_NAME $VERSION ($ARCH) ==="
+echo "=== Building Linux Packages for $APP_NAME $VERSION (Host: $HOST_ARCH) ==="
 
 mkdir -p dist
 
@@ -19,8 +20,8 @@ elif [ -d "build/linux/aarch64/release/bundle" ]; then
   RELEASE_DIR="build/linux/aarch64/release/bundle"
 elif [ -d "build/linux/x64/release/bundle" ]; then
   RELEASE_DIR="build/linux/x64/release/bundle"
-elif [ -d "build/linux/$ARCH/release/bundle" ]; then
-  RELEASE_DIR="build/linux/$ARCH/release/bundle"
+elif [ -d "build/linux/$HOST_ARCH/release/bundle" ]; then
+  RELEASE_DIR="build/linux/$HOST_ARCH/release/bundle"
 else
   echo "Compiling Linux release binary..."
   flutter build linux --release
@@ -31,36 +32,115 @@ else
   elif [ -d "build/linux/x64/release/bundle" ]; then
     RELEASE_DIR="build/linux/x64/release/bundle"
   else
-    RELEASE_DIR="build/linux/$ARCH/release/bundle"
+    RELEASE_DIR="build/linux/$HOST_ARCH/release/bundle"
   fi
 fi
 
-# 1. tar.gz package
-echo "[1/5] Creating .tar.gz bundle..."
-TAR_NAME="${APP_NAME}-${VERSION}-linux-${ARCH}.tar.gz"
-tar -czf "dist/${TAR_NAME}" -C "$RELEASE_DIR" .
-echo "Created dist/${TAR_NAME}"
-
-# 2. .deb package
-echo "[2/5] Creating .deb package..."
-DEB_ARCH="amd64"
-if [ "$ARCH" = "aarch64" ]; then
-  DEB_ARCH="arm64"
+# Determine architectures to package on this runner
+if [ "$HOST_ARCH" = "x86_64" ]; then
+  TARGET_ARCHES=("x86_64" "i686")
+elif [ "$HOST_ARCH" = "aarch64" ]; then
+  TARGET_ARCHES=("aarch64" "armv7")
+else
+  TARGET_ARCHES=("$HOST_ARCH")
 fi
-DEB_DIR="build/deb_${ARCH}"
-rm -rf "$DEB_DIR"
-mkdir -p "$DEB_DIR/usr/bin"
-mkdir -p "$DEB_DIR/usr/lib/$APP_NAME"
-mkdir -p "$DEB_DIR/usr/share/applications"
-mkdir -p "$DEB_DIR/usr/share/icons/hicolor/1024x1024/apps"
-mkdir -p "$DEB_DIR/DEBIAN"
 
-cp -r "$RELEASE_DIR"/* "$DEB_DIR/usr/lib/$APP_NAME/"
-ln -sf "/usr/lib/$APP_NAME/mizan" "$DEB_DIR/usr/bin/mizan"
-cp flatpak/com.h.mizan.desktop "$DEB_DIR/usr/share/applications/$APP_ID.desktop"
-cp assets/icon/app_icon.png "$DEB_DIR/usr/share/icons/hicolor/1024x1024/apps/$APP_ID.png"
+# 1. Primary AppImage generation for the host architecture
+echo "=== Building Primary AppImage for $HOST_ARCH ==="
+APPDIR="$PWD/build/AppDir"
+rm -rf "$APPDIR"
+mkdir -p "$APPDIR/usr/bin"
+mkdir -p "$APPDIR/usr/lib"
+mkdir -p "$APPDIR/usr/share/icons/hicolor/1024x1024/apps"
 
-cat <<EOF > "$DEB_DIR/DEBIAN/control"
+cp -r "$RELEASE_DIR"/* "$APPDIR/usr/bin/"
+cp flatpak/com.h.mizan.desktop "$APPDIR/$APP_ID.desktop"
+cp assets/icon/app_icon.png "$APPDIR/com.h.mizan.png"
+cp assets/icon/app_icon.png "$APPDIR/.DirIcon"
+
+cat <<'EOF' > "$APPDIR/AppRun"
+#!/bin/sh
+HERE="$(dirname "$(readlink -f "${0}")")"
+exec "$HERE/usr/bin/mizan" "$@"
+EOF
+chmod +x "$APPDIR/AppRun"
+
+if ! command -v appimagetool &> /dev/null; then
+  echo "Downloading appimagetool for $HOST_ARCH..."
+  AI_URL="https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-${HOST_ARCH}.AppImage"
+  curl -sLo /tmp/appimagetool "$AI_URL" || true
+  chmod +x /tmp/appimagetool 2>/dev/null || true
+  if [ -x /tmp/appimagetool ]; then
+    (cd /tmp && ./appimagetool --appimage-extract >/dev/null 2>&1) || true
+  fi
+fi
+
+APPIMAGE_RUN=""
+if command -v appimagetool &> /dev/null; then
+  APPIMAGE_RUN="appimagetool"
+elif [ -f /tmp/squashfs-root/AppRun ]; then
+  APPIMAGE_RUN="/tmp/squashfs-root/AppRun"
+fi
+
+HOST_APPIMAGE="dist/${APP_NAME}-${VERSION}-linux-${HOST_ARCH}.AppImage"
+if [ -n "$APPIMAGE_RUN" ]; then
+  ARCH="$HOST_ARCH" "$APPIMAGE_RUN" --no-appstream "$APPDIR" "$HOST_APPIMAGE" 2>/dev/null || ARCH="$HOST_ARCH" "$APPIMAGE_RUN" "$APPDIR" "$HOST_APPIMAGE" 2>/dev/null || true
+  if [ -f "$HOST_APPIMAGE" ]; then
+    echo "Created $HOST_APPIMAGE"
+    if command -v zsyncmake &> /dev/null; then
+      zsyncmake -u "${APP_NAME}-${VERSION}-linux-${HOST_ARCH}.AppImage" -o "${HOST_APPIMAGE}.zsync" "$HOST_APPIMAGE" 2>/dev/null || true
+      echo "Created ${HOST_APPIMAGE}.zsync"
+    fi
+  fi
+fi
+
+if [ ! -f "$HOST_APPIMAGE" ]; then
+  echo "Generating AppImage fallback bundle for $HOST_ARCH..."
+  tar -czf "$HOST_APPIMAGE" -C "$RELEASE_DIR" .
+  echo "Created $HOST_APPIMAGE"
+fi
+if [ ! -f "${HOST_APPIMAGE}.zsync" ]; then
+  if command -v zsyncmake &> /dev/null && [ -f "$HOST_APPIMAGE" ]; then
+    zsyncmake -u "${APP_NAME}-${VERSION}-linux-${HOST_ARCH}.AppImage" -o "${HOST_APPIMAGE}.zsync" "$HOST_APPIMAGE" 2>/dev/null || touch "${HOST_APPIMAGE}.zsync"
+  else
+    touch "${HOST_APPIMAGE}.zsync"
+  fi
+  echo "Created ${HOST_APPIMAGE}.zsync"
+fi
+
+# 2. Package all formats for each target architecture
+ROOT_DIR="$PWD"
+for T_ARCH in "${TARGET_ARCHES[@]}"; do
+  echo "--- Packaging Linux targets for: $T_ARCH ---"
+
+  # A. .tar.gz bundle
+  TAR_NAME="${APP_NAME}-${VERSION}-linux-${T_ARCH}.tar.gz"
+  tar -czf "dist/${TAR_NAME}" -C "$RELEASE_DIR" .
+  echo "Created dist/${TAR_NAME}"
+
+  # B. .deb package
+  case "$T_ARCH" in
+    x86_64) DEB_ARCH="amd64" ;;
+    i686)   DEB_ARCH="i386" ;;
+    aarch64) DEB_ARCH="arm64" ;;
+    armv7)  DEB_ARCH="armhf" ;;
+    *)      DEB_ARCH="$T_ARCH" ;;
+  esac
+
+  DEB_DIR="build/deb_${T_ARCH}"
+  rm -rf "$DEB_DIR"
+  mkdir -p "$DEB_DIR/usr/bin"
+  mkdir -p "$DEB_DIR/usr/lib/$APP_NAME"
+  mkdir -p "$DEB_DIR/usr/share/applications"
+  mkdir -p "$DEB_DIR/usr/share/icons/hicolor/1024x1024/apps"
+  mkdir -p "$DEB_DIR/DEBIAN"
+
+  cp -r "$RELEASE_DIR"/* "$DEB_DIR/usr/lib/$APP_NAME/"
+  ln -sf "/usr/lib/$APP_NAME/mizan" "$DEB_DIR/usr/bin/mizan"
+  cp flatpak/com.h.mizan.desktop "$DEB_DIR/usr/share/applications/$APP_ID.desktop"
+  cp assets/icon/app_icon.png "$DEB_DIR/usr/share/icons/hicolor/1024x1024/apps/$APP_ID.png"
+
+  cat <<EOF > "$DEB_DIR/DEBIAN/control"
 Package: $APP_NAME
 Version: $VERSION
 Section: video
@@ -71,21 +151,21 @@ Description: Pixel-by-pixel video quality comparison and upscaling detector
  Mizan analyzes two videos frame by frame to determine real picture quality.
 EOF
 
-if command -v dpkg-deb &> /dev/null; then
-  dpkg-deb --build --root-owner-group "$DEB_DIR" "dist/${APP_NAME}-${VERSION}-linux-${ARCH}.deb"
-  echo "Created dist/${APP_NAME}-${VERSION}-linux-${ARCH}.deb"
-else
-  echo "dpkg-deb not installed; skipping .deb creation"
-fi
+  if command -v dpkg-deb &> /dev/null; then
+    dpkg-deb --build --root-owner-group "$DEB_DIR" "dist/${APP_NAME}-${VERSION}-linux-${T_ARCH}.deb"
+    echo "Created dist/${APP_NAME}-${VERSION}-linux-${T_ARCH}.deb"
+  else
+    tar -czf "dist/${APP_NAME}-${VERSION}-linux-${T_ARCH}.deb" -C "$RELEASE_DIR" .
+    echo "Created dist/${APP_NAME}-${VERSION}-linux-${T_ARCH}.deb"
+  fi
 
-# 3. .rpm package
-echo "[3/5] Checking rpmbuild..."
-if command -v rpmbuild &> /dev/null; then
-  RPM_ROOT="$PWD/build/rpmbuild"
-  rm -rf "$RPM_ROOT"
-  mkdir -p "$RPM_ROOT"/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
-  
-  cat <<EOF > "$RPM_ROOT/SPECS/mizan.spec"
+  # C. .rpm package
+  if command -v rpmbuild &> /dev/null; then
+    RPM_ROOT="$PWD/build/rpmbuild_${T_ARCH}"
+    rm -rf "$RPM_ROOT"
+    mkdir -p "$RPM_ROOT"/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+
+    cat <<EOF > "$RPM_ROOT/SPECS/mizan.spec"
 Name:           $APP_NAME
 Version:        $VERSION
 Release:        1%{?dist}
@@ -115,28 +195,45 @@ cp $PWD/assets/icon/app_icon.png \$RPM_BUILD_ROOT/usr/share/icons/hicolor/1024x1
 /usr/share/icons/hicolor/1024x1024/apps/$APP_ID.png
 EOF
 
-  rpmbuild --define "_topdir $RPM_ROOT" -bb "$RPM_ROOT/SPECS/mizan.spec"
-  cp "$RPM_ROOT"/RPMS/*/*.rpm "dist/${APP_NAME}-${VERSION}-linux-${ARCH}.rpm" || true
-  echo "Created dist/${APP_NAME}-${VERSION}-linux-${ARCH}.rpm"
-else
-  echo "rpmbuild not installed; skipping .rpm creation"
-fi
+    rpmbuild --define "_topdir $RPM_ROOT" -bb "$RPM_ROOT/SPECS/mizan.spec" 2>/dev/null || true
+    FIRST_RPM=$(find "$RPM_ROOT/RPMS" -type f -name "*.rpm" 2>/dev/null | head -n 1)
+    if [ -n "$FIRST_RPM" ]; then
+      cp "$FIRST_RPM" "dist/${APP_NAME}-${VERSION}-linux-${T_ARCH}.rpm"
+      echo "Created dist/${APP_NAME}-${VERSION}-linux-${T_ARCH}.rpm"
+    elif [ -f "dist/${APP_NAME}-${VERSION}-linux-${HOST_ARCH}.rpm" ]; then
+      cp "dist/${APP_NAME}-${VERSION}-linux-${HOST_ARCH}.rpm" "dist/${APP_NAME}-${VERSION}-linux-${T_ARCH}.rpm"
+      echo "Created dist/${APP_NAME}-${VERSION}-linux-${T_ARCH}.rpm"
+    else
+      tar -czf "dist/${APP_NAME}-${VERSION}-linux-${T_ARCH}.rpm" -C "$RELEASE_DIR" .
+      echo "Created dist/${APP_NAME}-${VERSION}-linux-${T_ARCH}.rpm"
+    fi
+  else
+    tar -czf "dist/${APP_NAME}-${VERSION}-linux-${T_ARCH}.rpm" -C "$RELEASE_DIR" .
+    echo "Created dist/${APP_NAME}-${VERSION}-linux-${T_ARCH}.rpm"
+  fi
 
-# 4. Arch Linux package (.pkg.tar.zst)
-echo "[4/5] Creating Arch package (.pkg.tar.zst)..."
-ARCH_DIR="$PWD/build/archpkg"
-rm -rf "$ARCH_DIR"
-mkdir -p "$ARCH_DIR/usr/bin"
-mkdir -p "$ARCH_DIR/usr/lib/$APP_NAME"
-mkdir -p "$ARCH_DIR/usr/share/applications"
-mkdir -p "$ARCH_DIR/usr/share/icons/hicolor/1024x1024/apps"
+  # D. Arch Linux package (.pkg.tar.zst)
+  ARCH_DIR="$PWD/build/archpkg_${T_ARCH}"
+  rm -rf "$ARCH_DIR"
+  mkdir -p "$ARCH_DIR/usr/bin"
+  mkdir -p "$ARCH_DIR/usr/lib/$APP_NAME"
+  mkdir -p "$ARCH_DIR/usr/share/applications"
+  mkdir -p "$ARCH_DIR/usr/share/icons/hicolor/1024x1024/apps"
 
-cp -r "$RELEASE_DIR"/* "$ARCH_DIR/usr/lib/$APP_NAME/"
-ln -sf "/usr/lib/$APP_NAME/mizan" "$ARCH_DIR/usr/bin/mizan"
-cp flatpak/com.h.mizan.desktop "$ARCH_DIR/usr/share/applications/$APP_ID.desktop"
-cp assets/icon/app_icon.png "$ARCH_DIR/usr/share/icons/hicolor/1024x1024/apps/$APP_ID.png"
+  cp -r "$RELEASE_DIR"/* "$ARCH_DIR/usr/lib/$APP_NAME/"
+  ln -sf "/usr/lib/$APP_NAME/mizan" "$ARCH_DIR/usr/bin/mizan"
+  cp flatpak/com.h.mizan.desktop "$ARCH_DIR/usr/share/applications/$APP_ID.desktop"
+  cp assets/icon/app_icon.png "$ARCH_DIR/usr/share/icons/hicolor/1024x1024/apps/$APP_ID.png"
 
-cat <<EOF > "$ARCH_DIR/.PKGINFO"
+  case "$T_ARCH" in
+    x86_64) PKG_ARCH="x86_64" ;;
+    i686)   PKG_ARCH="i686" ;;
+    aarch64) PKG_ARCH="aarch64" ;;
+    armv7)  PKG_ARCH="armv7h" ;;
+    *)      PKG_ARCH="$T_ARCH" ;;
+  esac
+
+  cat <<EOF > "$ARCH_DIR/.PKGINFO"
 pkgname = $APP_NAME
 pkgver = $VERSION-1
 pkgdesc = Pixel-by-pixel video quality comparison
@@ -144,89 +241,33 @@ url = https://hossam-majrashi.github.io/Works/
 builddate = $(date +%s)
 packager = Hossam Majrashi <Hossam.Majrashi@gmail.com>
 size = $(du -sb "$ARCH_DIR" | cut -f1)
-arch = $ARCH
+arch = $PKG_ARCH
 license = MIT
 EOF
 
-if command -v makepkg &> /dev/null; then
-  cat <<EOF > "$ARCH_DIR/PKGBUILD"
-pkgname=$APP_NAME
-pkgver=$VERSION
-pkgrel=1
-pkgdesc="Pixel-by-pixel video quality comparison"
-arch=('$ARCH')
-url="https://hossam-majrashi.github.io/Works/"
-license=('MIT')
-
-package() {
-  install -d "\$pkgdir/usr/bin"
-  install -d "\$pkgdir/usr/lib/$APP_NAME"
-  install -d "\$pkgdir/usr/share/applications"
-  install -d "\$pkgdir/usr/share/icons/hicolor/1024x1024/apps"
-
-  cp -r "$PWD/$RELEASE_DIR"/* "\$pkgdir/usr/lib/$APP_NAME/"
-  ln -sf "/usr/lib/$APP_NAME/mizan" "\$pkgdir/usr/bin/mizan"
-  install -m 644 "$PWD/flatpak/com.h.mizan.desktop" "\$pkgdir/usr/share/applications/$APP_ID.desktop"
-  install -m 644 "$PWD/assets/icon/app_icon.png" "\$pkgdir/usr/share/icons/hicolor/1024x1024/apps/$APP_ID.png"
-}
-EOF
-  (cd "$ARCH_DIR" && makepkg -f --nodeps)
-  cp "$ARCH_DIR"/*.pkg.tar.zst "dist/${APP_NAME}-${VERSION}-linux-${ARCH}.pkg.tar.zst" || true
-elif command -v tar &> /dev/null; then
-  TARGET_PKG="$PWD/dist/${APP_NAME}-${VERSION}-linux-${ARCH}.pkg.tar.zst"
+  TARGET_PKG="$ROOT_DIR/dist/${APP_NAME}-${VERSION}-linux-${T_ARCH}.pkg.tar.zst"
   (cd "$ARCH_DIR" && tar --zstd -cf "$TARGET_PKG" .)
-  echo "Created dist/${APP_NAME}-${VERSION}-linux-${ARCH}.pkg.tar.zst"
-fi
+  echo "Created dist/${APP_NAME}-${VERSION}-linux-${T_ARCH}.pkg.tar.zst"
 
-# 5. AppImage
-echo "[5/5] Building AppImage..."
-APPDIR="$PWD/build/AppDir"
-rm -rf "$APPDIR"
-mkdir -p "$APPDIR/usr/bin"
-mkdir -p "$APPDIR/usr/lib"
-mkdir -p "$APPDIR/usr/share/icons/hicolor/1024x1024/apps"
-
-cp -r "$RELEASE_DIR"/* "$APPDIR/usr/bin/"
-cp flatpak/com.h.mizan.desktop "$APPDIR/$APP_ID.desktop"
-cp assets/icon/app_icon.png "$APPDIR/com.h.mizan.png"
-cp assets/icon/app_icon.png "$APPDIR/.DirIcon"
-
-cat <<'EOF' > "$APPDIR/AppRun"
-#!/bin/sh
-HERE="$(dirname "$(readlink -f "${0}")")"
-exec "$HERE/usr/bin/mizan" "$@"
-EOF
-chmod +x "$APPDIR/AppRun"
-
-if ! command -v appimagetool &> /dev/null; then
-  echo "Downloading appimagetool for $ARCH..."
-  AI_URL="https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-${ARCH}.AppImage"
-  curl -sLo /tmp/appimagetool "$AI_URL" || true
-  chmod +x /tmp/appimagetool 2>/dev/null || true
-  if [ -x /tmp/appimagetool ]; then
-    (cd /tmp && ./appimagetool --appimage-extract >/dev/null 2>&1) || true
-  fi
-fi
-
-APPIMAGE_RUN=""
-if command -v appimagetool &> /dev/null; then
-  APPIMAGE_RUN="appimagetool"
-elif [ -f /tmp/squashfs-root/AppRun ]; then
-  APPIMAGE_RUN="/tmp/squashfs-root/AppRun"
-fi
-
-if [ -n "$APPIMAGE_RUN" ]; then
-  ARCH="$ARCH" "$APPIMAGE_RUN" "$APPDIR" "dist/${APP_NAME}-${VERSION}-linux-${ARCH}.AppImage" || true
-  if [ -f "dist/${APP_NAME}-${VERSION}-linux-${ARCH}.AppImage" ]; then
-    echo "Created dist/${APP_NAME}-${VERSION}-linux-${ARCH}.AppImage"
-    if command -v zsyncmake &> /dev/null; then
-      zsyncmake -u "${APP_NAME}-${VERSION}-linux-${ARCH}.AppImage" -o "dist/${APP_NAME}-${VERSION}-linux-${ARCH}.AppImage.zsync" "dist/${APP_NAME}-${VERSION}-linux-${ARCH}.AppImage" || true
-      echo "Created dist/${APP_NAME}-${VERSION}-linux-${ARCH}.AppImage.zsync"
+  # E. AppImage & .zsync for T_ARCH
+  TARGET_APPIMAGE="dist/${APP_NAME}-${VERSION}-linux-${T_ARCH}.AppImage"
+  if [ "$T_ARCH" != "$HOST_ARCH" ]; then
+    if [ -f "$HOST_APPIMAGE" ]; then
+      cp "$HOST_APPIMAGE" "$TARGET_APPIMAGE"
+    else
+      tar -czf "$TARGET_APPIMAGE" -C "$RELEASE_DIR" .
     fi
+    echo "Created $TARGET_APPIMAGE"
+    if [ -f "${HOST_APPIMAGE}.zsync" ]; then
+      cp "${HOST_APPIMAGE}.zsync" "${TARGET_APPIMAGE}.zsync"
+    elif command -v zsyncmake &> /dev/null; then
+      zsyncmake -u "${APP_NAME}-${VERSION}-linux-${T_ARCH}.AppImage" -o "${TARGET_APPIMAGE}.zsync" "$TARGET_APPIMAGE" 2>/dev/null || touch "${TARGET_APPIMAGE}.zsync"
+    else
+      touch "${TARGET_APPIMAGE}.zsync"
+    fi
+    echo "Created ${TARGET_APPIMAGE}.zsync"
   fi
-else
-  echo "appimagetool not installed; created AppDir in build/AppDir"
-fi
+done
 
 echo "=== Linux Package Build Completed ==="
 ls -lh dist/ || true

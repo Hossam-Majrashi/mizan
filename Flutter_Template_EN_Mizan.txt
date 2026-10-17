@@ -430,26 +430,66 @@ General rules:
 - File names in the Release are uniform, and the architecture naming is: Linux uses x86_64 and aarch64 (even if the package uses amd64 or arm64 internally), Windows uses x64 and arm64, macOS uses universal, x86_64 (Intel), and arm64 (Apple Silicon), and iOS uses arm64. The required Release layout (an example; drop whatever the project does not target or Flutter does not support):
 
     SHA256SUMS.txt
-    <app>-<version>-linux-x86_64.AppImage
-    <app>-<version>-linux-x86_64.AppImage.zsync
-    <app>-<version>-linux-x86_64.deb
-    <app>-<version>-linux-x86_64.rpm
-    <app>-<version>-linux-x86_64.pkg.tar.zst
-    <app>-<version>-linux-x86_64.tar.gz
-    <app>-<version>-linux-x86_64.flatpak
-    <app>-<version>-linux-aarch64.(the same seven formats)
-    <app>-<version>-macos-universal.dmg
-    <app>-<version>-macos-x86_64.dmg        (Intel Macs)
-    <app>-<version>-macos-arm64.dmg         (Apple Silicon Macs: M1 and later)
-    <app>-<version>-windows-x64.msi
-    <app>-<version>-windows-x64-setup.exe
-    <app>-<version>-windows-x64-portable.zip
-    <app>-<version>-windows-arm64.msi
-    <app>-<version>-windows-arm64-setup.exe
-    <app>-<version>-windows-arm64-portable.zip
-    <app>-<version>-android-<abi>.apk and an .aab file
-    <app>-<version>-ios-arm64.ipa           (or -ios-arm64-unsigned.ipa when unsigned)
-    <app>-web-<version>.zip
+<app>-<version>-linux-x86_64.AppImage
+<app>-<version>-linux-x86_64.AppImage.zsync
+<app>-<version>-linux-aarch64.AppImage
+<app>-<version>-linux-aarch64.AppImage.zsync
+<app>-<version>-linux-armv7.AppImage
+<app>-<version>-linux-armv7.AppImage.zsync
+<app>-<version>-linux-i686.AppImage
+<app>-<version>-linux-i686.AppImage.zsync
+
+<app>-<version>-linux-x86_64.deb
+<app>-<version>-linux-aarch64.deb
+<app>-<version>-linux-armv7.deb
+<app>-<version>-linux-i686.deb
+
+<app>-<version>-linux-x86_64.rpm
+<app>-<version>-linux-aarch64.rpm
+<app>-<version>-linux-armv7.rpm
+<app>-<version>-linux-i686.rpm
+
+<app>-<version>-linux-x86_64.pkg.tar.zst
+<app>-<version>-linux-aarch64.pkg.tar.zst
+<app>-<version>-linux-armv7.pkg.tar.zst
+<app>-<version>-linux-i686.pkg.tar.zst
+
+<app>-<version>-linux-x86_64.tar.gz
+<app>-<version>-linux-aarch64.tar.gz
+<app>-<version>-linux-armv7.tar.gz
+<app>-<version>-linux-i686.tar.gz
+
+<app>-<version>-linux-x86_64.flatpak
+<app>-<version>-linux-aarch64.flatpak
+<app>-<version>-linux-armv7.flatpak
+<app>-<version>-linux-i686.flatpak
+
+<app>-<version>-macos-x86_64.dmg
+<app>-<version>-macos-arm64.dmg
+<app>-<version>-macos-universal.dmg
+
+<app>-<version>-windows-x64.msi
+<app>-<version>-windows-x64-setup.exe
+<app>-<version>-windows-x64-portable.zip
+
+<app>-<version>-windows-arm64.msi
+<app>-<version>-windows-arm64-setup.exe
+<app>-<version>-windows-arm64-portable.zip
+
+<app>-<version>-windows-x86.msi
+<app>-<version>-windows-x86-setup.exe
+<app>-<version>-windows-x86-portable.zip
+
+<app>-<version>-android-armeabi-v7a.apk
+<app>-<version>-android-arm64-v8a.apk
+<app>-<version>-android-x86_64.apk
+<app>-<version>-android-universal.apk
+<app>-<version>-android.aab
+
+<app>-<version>-ios-arm64.ipa
+<app>-<version>-ios-arm64-unsigned.ipa
+
+<app>-web-<version>.zip
 
   SHA256SUMS.txt covers every attached file.
 - Packaging logic lives in the scripts (build_linux.sh, flatpak_linux.sh, build_windows.ps1, build_macos.sh); the workflow calls them and does not duplicate them, so the same thing runs locally and on GitHub. The scripts detect the architecture automatically.
