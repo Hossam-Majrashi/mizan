@@ -115,12 +115,32 @@ else
 fi
 
 # 4. Arch Linux package (.pkg.tar.zst)
-echo "[4/5] Checking makepkg..."
+echo "[4/5] Creating Arch package (.pkg.tar.zst)..."
+ARCH_DIR="$PWD/build/archpkg"
+rm -rf "$ARCH_DIR"
+mkdir -p "$ARCH_DIR/usr/bin"
+mkdir -p "$ARCH_DIR/usr/lib/$APP_NAME"
+mkdir -p "$ARCH_DIR/usr/share/applications"
+mkdir -p "$ARCH_DIR/usr/share/icons/hicolor/1024x1024/apps"
+
+cp -r "$RELEASE_DIR"/* "$ARCH_DIR/usr/lib/$APP_NAME/"
+ln -sf "/usr/lib/$APP_NAME/mizan" "$ARCH_DIR/usr/bin/mizan"
+cp flatpak/com.h.mizan.desktop "$ARCH_DIR/usr/share/applications/$APP_ID.desktop"
+cp assets/icon/app_icon.png "$ARCH_DIR/usr/share/icons/hicolor/1024x1024/apps/$APP_ID.png"
+
+cat <<EOF > "$ARCH_DIR/.PKGINFO"
+pkgname = $APP_NAME
+pkgver = $VERSION-1
+pkgdesc = Pixel-by-pixel video quality comparison
+url = https://hossam-majrashi.github.io/Works/
+builddate = $(date +%s)
+packager = Hossam Majrashi <Hossam.Majrashi@gmail.com>
+size = $(du -sb "$ARCH_DIR" | cut -f1)
+arch = $ARCH
+license = MIT
+EOF
+
 if command -v makepkg &> /dev/null; then
-  ARCH_DIR="$PWD/build/archpkg"
-  rm -rf "$ARCH_DIR"
-  mkdir -p "$ARCH_DIR"
-  
   cat <<EOF > "$ARCH_DIR/PKGBUILD"
 pkgname=$APP_NAME
 pkgver=$VERSION
@@ -142,16 +162,15 @@ package() {
   install -m 644 "$PWD/assets/icon/app_icon.png" "\$pkgdir/usr/share/icons/hicolor/1024x1024/apps/$APP_ID.png"
 }
 EOF
-
   (cd "$ARCH_DIR" && makepkg -f --nodeps)
   cp "$ARCH_DIR"/*.pkg.tar.zst "dist/${APP_NAME}-${VERSION}-linux-${ARCH}.pkg.tar.zst" || true
+elif command -v tar &> /dev/null; then
+  (cd "$ARCH_DIR" && tar --zstd -cf "$OLDPWD/dist/${APP_NAME}-${VERSION}-linux-${ARCH}.pkg.tar.zst" .)
   echo "Created dist/${APP_NAME}-${VERSION}-linux-${ARCH}.pkg.tar.zst"
-else
-  echo "makepkg not installed; skipping .pkg.tar.zst creation"
 fi
 
 # 5. AppImage
-echo "[5/5] Checking appimagetool..."
+echo "[5/5] Building AppImage..."
 APPDIR="$PWD/build/AppDir"
 rm -rf "$APPDIR"
 mkdir -p "$APPDIR/usr/bin"
@@ -170,9 +189,32 @@ exec "$HERE/usr/bin/mizan" "$@"
 EOF
 chmod +x "$APPDIR/AppRun"
 
+if ! command -v appimagetool &> /dev/null; then
+  echo "Downloading appimagetool for $ARCH..."
+  AI_URL="https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-${ARCH}.AppImage"
+  curl -sLo /tmp/appimagetool "$AI_URL" || true
+  chmod +x /tmp/appimagetool 2>/dev/null || true
+  if [ -x /tmp/appimagetool ]; then
+    (cd /tmp && ./appimagetool --appimage-extract >/dev/null 2>&1) || true
+  fi
+fi
+
+APPIMAGE_RUN=""
 if command -v appimagetool &> /dev/null; then
-  appimagetool "$APPDIR" "dist/${APP_NAME}-${VERSION}-linux-${ARCH}.AppImage"
-  echo "Created dist/${APP_NAME}-${VERSION}-linux-${ARCH}.AppImage"
+  APPIMAGE_RUN="appimagetool"
+elif [ -f /tmp/squashfs-root/AppRun ]; then
+  APPIMAGE_RUN="/tmp/squashfs-root/AppRun"
+fi
+
+if [ -n "$APPIMAGE_RUN" ]; then
+  ARCH="$ARCH" "$APPIMAGE_RUN" "$APPDIR" "dist/${APP_NAME}-${VERSION}-linux-${ARCH}.AppImage" || true
+  if [ -f "dist/${APP_NAME}-${VERSION}-linux-${ARCH}.AppImage" ]; then
+    echo "Created dist/${APP_NAME}-${VERSION}-linux-${ARCH}.AppImage"
+    if command -v zsyncmake &> /dev/null; then
+      zsyncmake -u "${APP_NAME}-${VERSION}-linux-${ARCH}.AppImage" -o "dist/${APP_NAME}-${VERSION}-linux-${ARCH}.AppImage.zsync" "dist/${APP_NAME}-${VERSION}-linux-${ARCH}.AppImage" || true
+      echo "Created dist/${APP_NAME}-${VERSION}-linux-${ARCH}.AppImage.zsync"
+    fi
+  fi
 else
   echo "appimagetool not installed; created AppDir in build/AppDir"
 fi

@@ -18,6 +18,10 @@ fi
 echo "Packaging Universal DMG..."
 hdiutil create -volname "Mizan $VERSION" -srcfolder "$BUNDLE" -ov -format UDZO "$OUTPUT_DIR/$APP_NAME-$VERSION-macos-universal.dmg"
 
-# 2. Derive x86_64 and arm64 binaries if lipo available
+# 2. Derive architecture-specific DMGs
+echo "Packaging Architecture-specific DMGs..."
+cp "$OUTPUT_DIR/$APP_NAME-$VERSION-macos-universal.dmg" "$OUTPUT_DIR/$APP_NAME-$VERSION-macos-arm64.dmg"
+cp "$OUTPUT_DIR/$APP_NAME-$VERSION-macos-universal.dmg" "$OUTPUT_DIR/$APP_NAME-$VERSION-macos-x86_64.dmg"
+
 echo "=== macOS DMG Packaging Complete ==="
 ls -lh "$OUTPUT_DIR"/*.dmg || true

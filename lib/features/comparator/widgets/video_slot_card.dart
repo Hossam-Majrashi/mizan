@@ -33,14 +33,11 @@ class VideoSlotCard extends StatelessWidget {
     final accentColor = isA ? AppColors.videoAColor : AppColors.videoBColor;
 
     return DropTarget(
-      onDrop: (detail) async {
-        for (final item in detail.items) {
-          if (item is DropFileItem) {
-            final path = item.localPath ?? '';
-            if (path.isNotEmpty) {
-              onFileDropped(path);
-              break;
-            }
+      onDragDone: (detail) {
+        if (detail.files.isNotEmpty) {
+          final file = detail.files.first;
+          if (file.path.isNotEmpty) {
+            onFileDropped(file.path);
           }
         }
       },
