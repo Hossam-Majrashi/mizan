@@ -12,18 +12,26 @@ echo "=== Building Linux Packages for $APP_NAME $VERSION ($ARCH) ==="
 mkdir -p dist
 
 # Verify release build exists
-RELEASE_DIR="build/linux/$ARCH/release/bundle"
-if [ ! -d "$RELEASE_DIR" ]; then
-  # Fallback check standard x64 directory
-  if [ -d "build/linux/x64/release/bundle" ]; then
+RELEASE_DIR=""
+if [ -d "build/linux/arm64/release/bundle" ]; then
+  RELEASE_DIR="build/linux/arm64/release/bundle"
+elif [ -d "build/linux/aarch64/release/bundle" ]; then
+  RELEASE_DIR="build/linux/aarch64/release/bundle"
+elif [ -d "build/linux/x64/release/bundle" ]; then
+  RELEASE_DIR="build/linux/x64/release/bundle"
+elif [ -d "build/linux/$ARCH/release/bundle" ]; then
+  RELEASE_DIR="build/linux/$ARCH/release/bundle"
+else
+  echo "Compiling Linux release binary..."
+  flutter build linux --release
+  if [ -d "build/linux/arm64/release/bundle" ]; then
+    RELEASE_DIR="build/linux/arm64/release/bundle"
+  elif [ -d "build/linux/aarch64/release/bundle" ]; then
+    RELEASE_DIR="build/linux/aarch64/release/bundle"
+  elif [ -d "build/linux/x64/release/bundle" ]; then
     RELEASE_DIR="build/linux/x64/release/bundle"
   else
-    echo "Compiling Linux release binary..."
-    flutter build linux --release
     RELEASE_DIR="build/linux/$ARCH/release/bundle"
-    if [ ! -d "$RELEASE_DIR" ]; then
-      RELEASE_DIR="build/linux/x64/release/bundle"
-    fi
   fi
 fi
 
@@ -165,7 +173,8 @@ EOF
   (cd "$ARCH_DIR" && makepkg -f --nodeps)
   cp "$ARCH_DIR"/*.pkg.tar.zst "dist/${APP_NAME}-${VERSION}-linux-${ARCH}.pkg.tar.zst" || true
 elif command -v tar &> /dev/null; then
-  (cd "$ARCH_DIR" && tar --zstd -cf "$OLDPWD/dist/${APP_NAME}-${VERSION}-linux-${ARCH}.pkg.tar.zst" .)
+  TARGET_PKG="$PWD/dist/${APP_NAME}-${VERSION}-linux-${ARCH}.pkg.tar.zst"
+  (cd "$ARCH_DIR" && tar --zstd -cf "$TARGET_PKG" .)
   echo "Created dist/${APP_NAME}-${VERSION}-linux-${ARCH}.pkg.tar.zst"
 fi
 

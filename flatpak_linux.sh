@@ -20,10 +20,22 @@ REPO_DIR="build/flatpak_repo"
 rm -rf "$BUILD_DIR" "$REPO_DIR"
 
 # Stage source files for flatpak manifest
-mkdir -p build/flatpak_stage
-cp build/linux/$ARCH/release/bundle/mizan build/flatpak_stage/ 2>/dev/null || cp build/linux/x64/release/bundle/mizan build/flatpak_stage/
-cp -r build/linux/$ARCH/release/bundle/data build/flatpak_stage/ 2>/dev/null || cp -r build/linux/x64/release/bundle/data build/flatpak_stage/
-cp -r build/linux/$ARCH/release/bundle/lib build/flatpak_stage/ 2>/dev/null || cp -r build/linux/x64/release/bundle/lib build/flatpak_stage/
+BUNDLE_DIR=""
+if [ -d "build/linux/arm64/release/bundle" ]; then
+  BUNDLE_DIR="build/linux/arm64/release/bundle"
+elif [ -d "build/linux/aarch64/release/bundle" ]; then
+  BUNDLE_DIR="build/linux/aarch64/release/bundle"
+elif [ -d "build/linux/x64/release/bundle" ]; then
+  BUNDLE_DIR="build/linux/x64/release/bundle"
+elif [ -d "build/linux/$ARCH/release/bundle" ]; then
+  BUNDLE_DIR="build/linux/$ARCH/release/bundle"
+fi
+
+if [ -n "$BUNDLE_DIR" ]; then
+  cp "$BUNDLE_DIR/mizan" build/flatpak_stage/ 2>/dev/null || true
+  cp -r "$BUNDLE_DIR/data" build/flatpak_stage/ 2>/dev/null || true
+  cp -r "$BUNDLE_DIR/lib" build/flatpak_stage/ 2>/dev/null || true
+fi
 cp flatpak/com.h.mizan.desktop build/flatpak_stage/
 cp flatpak/com.h.mizan.metainfo.xml build/flatpak_stage/
 cp assets/icon/app_icon.png build/flatpak_stage/
