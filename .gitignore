@@ -3,6 +3,7 @@
 *.log
 *.pyc
 *.swp
+*~
 .DS_Store
 .atom/
 .build/
@@ -12,44 +13,74 @@
 .swiftpm/
 migrate_working_dir/
 
-# IntelliJ related
+# IntelliJ / Android Studio
 *.iml
 *.ipr
 *.iws
 .idea/
 
-# The .vscode folder contains launch configuration and tasks you configure in
-# VS Code which you may wish to be included in version control, so this line
-# is commented out by default.
-#.vscode/
+# Visual Studio Code
+.vscode/
 
-# Flutter/Dart/Pub related
+# Flutter / Dart / Pub
 **/doc/api/
 **/ios/Flutter/.last_build_id
 .dart_tool/
+.flutter-plugins
 .flutter-plugins-dependencies
+.packages
 .pub-cache/
 .pub/
 /build/
 /coverage/
+.widget_preview/
 
-# Symbolication related
-app.*.symbols
+# Build & Release Artifacts
+dist/
+release_assets/
+*.AppImage
+*.AppImage.zsync
+*.deb
+*.rpm
+*.pkg.tar.zst
+*.flatpak
+*.tar.gz
+*.dmg
+*.msi
+*.wixobj
+*.wixpdb
+*-setup.exe
+*-portable.zip
+*.apk
+*.aab
+*.ipa
+SHA256SUMS.txt
 
-# Obfuscation related
-app.*.map.json
+# Platform Ephemeral & Pods
+linux/flutter/ephemeral/
+windows/flutter/ephemeral/
+macos/Flutter/ephemeral/
+macos/Pods/
+ios/Flutter/ephemeral/
+ios/Flutter/Generated.xcconfig
+ios/Flutter/app.framework
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+ios/Pods/
+ios/.symlinks/
 
-# Android Studio will place build artifacts here
+# Android Studio & Gradle
+.gradle/
+android/.gradle/
 /android/app/debug
 /android/app/profile
 /android/app/release
+android/captures/
 
-# Widget Preview related
-.widget_preview/
-
-# Local & Secrets
+# Secrets & Local Properties
 android/local.properties
 key.properties
 *.keystore
 *.jks
 .env*
+!*.example
